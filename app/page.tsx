@@ -1,55 +1,127 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import BookReader from '@/components/BookReader'
+
+import { useEffect, useState } from 'react'
+import { LANGS, t, type Lang } from '@/lib/i18n'
 import FileLoader from '@/components/FileLoader'
-import LanguageSwitcher from '@/components/LanguageSwitcher'
-import { BookPage } from '@/lib/loaders'
-import { t, Lang } from '@/lib/i18n'
+import BookReader from '@/components/BookReader'
+import type { BookPage } from '@/lib/loaders'
+
+type State = 'loading' | 'not_member' | 'ready' | 'not_telegram'
 
 export default function Home() {
-  const [pages, setPages] = useState<BookPage[]>([])
-  const [title, setTitle] = useState('')
+  const [state, setState] = useState<State>('loading')
   const [lang, setLang] = useState<Lang>('ar')
-  const [auth, setAuth] = useState(false)
-  const router = useRouter()
-  const T = t(lang)
+  const [name, setName] = useState('')
+  const [pages, setPages] = useState<BookPage[] | null>(null)
+
+  const channelUrl = 'https://t.me/Allworlddigital'
+
+  async function authenticate() {
+    const tg = (window as any).Telegram?.WebApp
+
+    if (!tg || !tg.initData) {
+      setState('not_telegram')
+      return
+    }
+
+    tg.ready()
+    tg.expand()
+
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ initData: tg.initData }),
+    })
+
+    if (!res.ok) {
+      setState('not_telegram')
+      return
+    }
+
+    const data = await res.json()
+    setName(data.user?.first_name || '')
+
+    const code = (data.user?.language_code || 'ar').slice(0, 2)
+    if (LANGS.includes(code as Lang)) setLang(code as Lang)
+
+    setState(data.member ? 'ready' : 'not_member')
+  }
 
   useEffect(() => {
-    fetch('/api/me')
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.ok) setAuth(true)
-        else router.push('/login')
-      })
-      .catch(() => router.push('/login'))
-  }, [router])
+    authenticate()
+  }, [])
 
-  if (!auth) return <div className="screen glass">{T.loading}</div>
+  const d = t(lang)
+  const rtl = lang === 'ar'
 
-  return (
-    <main className="screen" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-      <header className="glass">
-        <h1>{title || T.appName}</h1>
-        <div className="actions">
-          <LanguageSwitcher lang={lang} onChange={setLang} />
-          <button
+  if (state === 'loading') {
+    return (
+      <main className="gate" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="card">
+          <div className="spinner" />
+          <p>{d.loading}</p>
+        </div>
+      </main>
+    )
+  }
+
+  if (state === 'not_telegram') {
+    return (
+      <main className="gate" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="card">
+          <h1>All World Digital Book</h1>
+          <p>افتح هذا التطبيق من داخل تليغرام فقط.</p>
+          <a className="btn" href="https://t.me/AllWorldBookBot/read">
+            افتح في تليغرام
+          </a>
+        </div>
+      </main>
+    )
+  }
+
+  if (state === 'not_member') {
+    return (
+      <main className="gate" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="card">
+          <h1>All World Digital Book</h1>
+          <p>{d.tagline}</p>
+          <p className="warn">{d.notMember}</p>
+          <a
             className="btn"
-            style={{ marginLeft: 10, marginRight: 10 }}
-            onClick={() => {
-              document.cookie = 'awdb_session=; Max-Age=0; path=/'
-              window.location.reload()
-            }}
+            href={channelUrl}
+            target="_blank"
+            rel="noreferrer"
           >
-            {T.logout}
+            {d.joinChannel}
+          </a>
+          <button className="btn ghost" onClick={() => { setState('loading'); authenticate() }}>
+            {d.verify}
           </button>
         </div>
+      </main>
+    )
+  }
+
+  return (
+    <main dir={rtl ? 'rtl' : 'ltr'}>
+      <header className="topbar">
+        <strong>{d.appName}</strong>
+        <span className="who">{name}</span>
+        <select
+          value={lang}
+          onChange={(e) => setLang(e.target.value as Lang)}
+        >
+          <option value="ar">العربية</option>
+          <option value="en">English</option>
+          <option value="fr">Français</option>
+          <option value="es">Español</option>
+        </select>
       </header>
 
-      {pages.length > 0 ? (
-        <BookReader pages={pages} lang={lang} />
+      {pages ? (
+        <BookReader pages={pages} lang={lang} onClose={() => setPages(null)} />
       ) : (
-        <FileLoader lang={lang} onLoaded={(p, t) => { setPages(p); setTitle(t); }} />
+        <FileLoader lang={lang} onLoaded={setPages} />
       )}
     </main>
   )
