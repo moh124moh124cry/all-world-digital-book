@@ -42,7 +42,8 @@ export default function Home() {
     setName(data.user?.first_name || '')
 
     const code = (data.user?.language_code || 'ar').slice(0, 2)
-    if (LANGS.includes(code as Lang)) setLang(code as Lang)
+    if (['ar', 'en', 'fr', 'es'].includes(code)) setLang(code as Lang)
+
 
     setState(data.member ? 'ready' : 'not_member')
   }
