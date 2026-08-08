@@ -45,6 +45,7 @@ export default function Home() {
     if (['ar', 'en', 'fr', 'es'].includes(code)) setLang(code as Lang)
 
 
+
     setState(data.member ? 'ready' : 'not_member')
   }
 
